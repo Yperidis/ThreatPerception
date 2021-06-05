@@ -1,5 +1,10 @@
 import numpy as np
 import networkx as nx
+from scipy.integrate import solve_ivp
+
+def SIRSyst(t, z, k, tau, N):
+    S, I, R = z
+    return [-k*S*I, k*S*I - 1/tau*I, 1/tau*I]
 
 def NetworkSetup(CellPopD, Type='ER', pER=0.5, WSneig=10, pWS=0.5, PAneig=10, pPA=0.5):
     '''
@@ -51,17 +56,20 @@ def NetworkSetup(CellPopD, Type='ER', pER=0.5, WSneig=10, pWS=0.5, PAneig=10, pP
 #     nx.set_node_attributes(AG, tempCellHDI, 'HDI')
     return AG
     
-def SpatialDangerProgression(AgNtw, t, Tnulls, progression='LinDec', tol=1e-5):
+def SpatialDangerProgression(AgNtw, t, Tnulls, progression='LinDec', T=100, k=1.5, tau=5, N=100, tol=1e-5):
     '''
     Function for progressing the true danger in each cell of an agent given an initial value (at t=0).
     Requires the running time as well as the time at which the danger will have fully abated (or have fallen 
-    below a given tolerance if the progression's decay is asymptotic).
+    below a given tolerance if the progression's decay is asymptotic). In case the SIR model is selected 
+    all the intrinsic parameters need to be specified (presets available for a given time range).
     
-    Lin: If the initial value of danger assumes any of the extreme ones then under the linear model they remain 
+    LinDec: If the initial value of danger assumes any of the extreme ones then under the linear model they remain 
     there.
     
-    Exp: If the initial value of danger assumes any of the extreme ones then under the exponential model they 
-    remain there.    
+    ExpDec: If the initial value of danger assumes any of the extreme ones then under the exponential model they 
+    remain there.
+    
+    SIR: The danger follows the infectious (normalised) infectious class of the SIR model.
     '''
     tempSt = np.array( list( nx.get_node_attributes(AgNtw, 'CellDangerStart').values() ) )  # the initial cells' danger
     temp = np.array( list( nx.get_node_attributes(AgNtw, 'CellDanger').values() ) ).astype(float)  # the present cells' danger
@@ -69,7 +77,7 @@ def SpatialDangerProgression(AgNtw, t, Tnulls, progression='LinDec', tol=1e-5):
     for Tn in Tnulls:
         idx = (temp > 0) & (tempSt == Tnulls[Tn][1])  # since danger is monotonous the initial non 0, 1 values of each cell should coincide for temp and tempSt
         if (progression == 'LinDec'):            
-            LinC = tempSt[idx]/Tnulls[Tn][0]  # determining the linear coefficients needed to annul the cell's danger at the specified time (Tn)
+            LinC = tempSt[idx]/Tnulls[Tn][0]  # determining the linear coefficients needed to annul the cell's danger at the specified time (Tn[0])
             if np.any(temp < tol):  # once the danger has disappeared assume it remains so under linear decay assumptions
                 temp[temp < tol] = 0.
             if np.any(temp > 0):
@@ -83,6 +91,15 @@ def SpatialDangerProgression(AgNtw, t, Tnulls, progression='LinDec', tol=1e-5):
                 temp[temp < tol] = 0  # vanquish the danger below the given tolerance
             if np.any(temp > tol):
                 temp[idx] = np.round( tempSt[idx] * np.exp(-ExpC*t), 4 )  # exponential decay
+            aux = { i[0] : i[1] for i in enumerate(temp) }
+        elif (progression == 'SIR'):  # infectious class of SIR as danger case
+            if np.any(temp < tol):
+                temp[temp < tol] = 0  # vanquish the danger below the given tolerance
+            if np.any(temp > tol):
+                sol = solve_ivp(SIRSyst, [1, T], [1-Tnulls[Tn][1], Tnulls[Tn][1], 0], args=(k, tau, N), dense_output=True)  # we always assume that the R class is 0 at t=0
+                tm = np.linspace(1, T, 3*T)
+                z = sol.sol(tm)
+                temp[idx] = np.round( z.T[t-1][1] * np.ones_like(temp[idx]), 4 )  # the infection-danger at the specified time (note the index-time step relation as per the simulation setup. This is due to compatibility with the design of the network of danger as a scalar instead of an array)
             aux = { i[0] : i[1] for i in enumerate(temp) }
         else:
             raise NameError('Unrecognised danger progression')
