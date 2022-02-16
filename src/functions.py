@@ -99,7 +99,8 @@ def SpatialDangerProgression(AgNtw, t, Tnulls, progression='LinDec', T=100, k=1.
                 sol = solve_ivp(SIRSyst, [1, T], [1-Tnulls[Tn][1], Tnulls[Tn][1], 0], args=(k, tau, N), dense_output=True)  # we always assume that the R class is 0 at t=0
                 tm = np.linspace(1, T, 3*T)
                 z = sol.sol(tm)
-                temp[idx] = np.round( z.T[t-1][1] * np.ones_like(temp[idx]), 4 )  # the infection-danger at the specified time (note the index-time step relation as per the simulation setup. This is due to compatibility with the design of the network of danger as a scalar instead of an array)
+                inf = z[1][:-1:3]
+                temp[idx] = np.round( inf[t-1] * np.ones_like(temp[idx]), 4 )  # the infection-danger at the specified time (note the index-time step relation as per the simulation setup. This is due to compatibility with the design of the network of danger as a scalar instead of an array)
             aux = { i[0] : i[1] for i in enumerate(temp) }
         else:
             raise NameError('Unrecognised danger progression')
