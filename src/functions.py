@@ -106,7 +106,7 @@ def SpatialDangerProgression(AgNtw, t, Tnulls, progression='LinDec', T=100, k=1.
             raise NameError('Unrecognised danger progression')
     nx.set_node_attributes(AgNtw, aux, 'CellDanger')
     
-def Influence(AgNtw, DistMat, Model='Deffuant', epsilon=0.2, mu=0.5):
+def Influence(AgNtw, Model='Deffuant', epsilon=0.2, mu=0.5):
     '''
     Function to calculate the influence on the perception term according to the Deffuant (selective bias), 
     F-J (assimilative) and J-A (repulsive) model with network considerations on a time step.
@@ -125,17 +125,17 @@ def Influence(AgNtw, DistMat, Model='Deffuant', epsilon=0.2, mu=0.5):
             idaux = (aux2 <= epsilon) & (-epsilon <= aux2)  # epsilon test for selective influence
             aux3[idaux] = mu * aux3[idaux]  # selective bias for influence
             aux3[~idaux] = 0  # the rest are unaffected
-            InfMat[i] = DistMat[i] @ aux3/AgDim  # Deffuant evolution term
+            InfMat[i] = AgNtw.nodes[0]['DistMat'][i] @ aux3/AgDim  # Deffuant evolution term
         elif Model == 'F-J':  # Friedkin-Johnsen model implementation (assimilative influence)
             weight = np.random.rand(AgDim)  # assign randomly weights among the agents
             weight = weight/weight.sum()  # normalise
-            InfMat[i] = mu * DistMat[i] @ (weight[i] * aux3/AgDim)  # F-J evolution term with smoothening and weights
+            InfMat[i] = mu * AgNtw.nodes[0]['DistMat'][i] @ (weight[i] * aux3/AgDim)  # F-J evolution term with smoothening and weights
         elif Model == 'J-A':  # Jaeger-Amblard model (repulsive influence)
             aux2 = AgNtw.nodes[i]['AgDanger'] - aux1
             idaux = (aux2 <= epsilon) & (-epsilon <= aux2)  # epsilon test for selective influence
             aux3[idaux] = mu * aux3[idaux]  # J-A attractive influence
             aux3[~idaux] = mu * ( np.ones_like(aux3[~idaux]) - 2*np.abs(aux3[~idaux]) )  # J-A repulsive influence
-            InfMat[i] = DistMat[i] @ aux3/AgDim  # J-A evolution term            
+            InfMat[i] = AgNtw.nodes[0]['DistMat'][i] @ aux3/AgDim  # J-A evolution term            
         else:
             raise NameError('Unrecognised influence model.')
     InfMat = np.round_( aux1 + InfMat, 4 ) # evolution
