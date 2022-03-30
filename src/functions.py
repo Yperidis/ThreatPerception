@@ -110,10 +110,7 @@ def Influence(AgNtw, Model='Deffuant', epsilon=0.2, mu=0.5):
     '''
     Function to calculate the influence on the perception term according to the Deffuant (selective bias), 
     F-J (assimilative) and J-A (repulsive) model with network considerations on a time step.
-    Returns a vector with the updated influences for all the agents. Passing the distance matrix as an 
-    argument had to be a compensation of run-time to the expense of memory and efficient function calling.
-    For networks up to 10**3 nodes this has been tested and is inconsequential. For large networks it 
-    should play a role and might be something worth taking into account for design.
+    Returns a vector with the updated influences for all the agents.
     '''
     AgDim, CellNo = len(AgNtw.nodes), len(AgNtw.nodes[1]['AgDanger'])
     InfMat = np.zeros( (AgDim, CellNo) )
@@ -125,22 +122,25 @@ def Influence(AgNtw, Model='Deffuant', epsilon=0.2, mu=0.5):
             idaux = (aux2 <= epsilon) & (-epsilon <= aux2)  # epsilon test for selective influence
             aux3[idaux] = mu * aux3[idaux]  # selective bias for influence
             aux3[~idaux] = 0  # the rest are unaffected
-            InfMat[i] = AgNtw.nodes[0]['DistMat'][i] @ aux3/AgDim  # Deffuant evolution term
+            InfMat[i] = AgNtw.nodes[0]['DistMat'][i] @ aux3/AgDim  # Deffuant opinion sum term
         elif Model == 'F-J':  # Friedkin-Johnsen model implementation (assimilative influence)
             weight = np.random.rand(AgDim)  # assign randomly weights among the agents
             weight = weight/weight.sum()  # normalise
-            InfMat[i] = mu * AgNtw.nodes[0]['DistMat'][i] @ (weight[i] * aux3/AgDim)  # F-J evolution term with smoothening and weights
+            InfMat[i] = mu * AgNtw.nodes[0]['DistMat'][i] @ (weight[i] * aux3/AgDim)  # F-J opinion sum term with smoothening and weights
         elif Model == 'J-A':  # Jaeger-Amblard model (repulsive influence)
-            aux2 = AgNtw.nodes[i]['AgDanger'] - aux1
-            idaux = (aux2 <= epsilon) & (-epsilon <= aux2)  # epsilon test for selective influence
-            aux3[idaux] = mu * aux3[idaux]  # J-A attractive influence
-            aux3[~idaux] = mu * ( np.ones_like(aux3[~idaux]) - 2*np.abs(aux3[~idaux]) )  # J-A repulsive influence
-            InfMat[i] = AgNtw.nodes[0]['DistMat'][i] @ aux3/AgDim  # J-A evolution term            
+            aux3 = mu * ( np.ones_like(aux3) - 2*np.abs(aux3) )  # J-A repulsive influence
+            InfMat[i] = AgNtw.nodes[0]['DistMat'][i] @ aux3/AgDim  # J-A opinion sum term            
         else:
             raise NameError('Unrecognised influence model.')
     InfMat = np.round_( aux1 + InfMat, 4 ) # evolution
+    if np.any(InfMat < 0):  # account for polarization (J-A model) cases
+        temp = InfMat < 0
+        InfMat[temp] = 0
+    if np.any(InfMat > 1):
+        temp = InfMat > 1
+        InfMat[temp] = 1
     temp = { j[1] : InfMat[j[0]] for j in enumerate( range(AgDim) ) }
-    nx.set_node_attributes(AgNtw, temp, 'Influence' )
+    nx.set_node_attributes(AgNtw, temp, 'AgDanger' )
     
 def Estimation(AgNtw, CellPopD, Method='Triang'):
     '''
